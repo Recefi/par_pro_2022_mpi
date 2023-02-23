@@ -8,31 +8,29 @@ TEST(Vect_Alt_Signs_MPI, Test_Par_Count1) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     const int n = 5;
-    std::vector<double> A, b, x1, x2;
+    std::vector<double> M, x1, x2;
 
     if (rank == 0) {
-        double matr[n][n] = {
-            {0, 0, 12, -18, 5},
-            {-2, 4, 3, 5, 0},
-            {-1, 2, 3, 0, 1},
-            {-4, 8, 12, -6, 14},
-            {4, -8, -6, -10, 0}
+        double matr[n][n+1] = {
+            {0, 0, 12, -18, 5, -9},
+            {-2, 4, 3, 5, 0, -7},
+            {-1, 2, 3, 0, 1, -4},
+            {-4, 8, 12, -6, 14, -1},
+            {4, -8, -6, -10, 0, 14}
         };
         for (int i = 0; i < n; ++i)
-            for (int j = 0; j < n; ++j)
-                A.push_back(matr[i][j]);
-        b = { -9, -7, -4, -1, 14 };
+            for (int j = 0; j < n + 1; ++j)
+                M.push_back(matr[i][j]);
 
-        printVector(A, "A = ");
-        printVector(b, "b = ");
+        printVector(M, "M = ");
     }
 
-    x1 = gaussMethParallel(A, b, n);
+    x1 = gaussMethParallel(M, n);
     if (rank == 0) {
         if (x1.size()) { printVector(x1, "x = "); }
         else { std::cout << "There is no solution\n"; }
 
-        x2 = gaussMethSequential(A, b, n);
+        x2 = gaussMethSequential(M, n);
         ASSERT_EQ(x1.size(), x2.size());
         for (int i = 0; i < x1.size(); ++i)
             ASSERT_NEAR(x1[i], x2[i], 0.0000001); // to avoid rounding errors after floating point operations
@@ -43,30 +41,28 @@ TEST(Vect_Alt_Signs_MPI, Test_Par_Count2) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     const int n = 4;
-    std::vector<double> A, b, x1, x2;
+    std::vector<double> M, x1, x2;
 
     if (rank == 0) {
-        double matr[n][n] = {
-            {4, -3, 2, -1},
-            {3, -2, 1, -3},
-            {-4, 3, -2, 1},
-            {5, -3, 1, -8}
+        double matr[n][n+1] = {
+            {4, -3, 2, -1, 8},
+            {3, -2, 1, -3, 7},
+            {-4, 3, -2, 1, -8},
+            {5, -3, 1, -8, 1}
         };
         for (int i = 0; i < n; ++i)
-            for (int j = 0; j < n; ++j)
-                A.push_back(matr[i][j]);
-        b = { 8, 7, -8, 1 };
+            for (int j = 0; j < n+1; ++j)
+                M.push_back(matr[i][j]);
 
-        printVector(A, "A = ");
-        printVector(b, "b = ");
+        printVector(M, "M = ");
     }
 
-    x1 = gaussMethParallel(A, b, n);
+    x1 = gaussMethParallel(M, n);
     if (rank == 0) {
         if (x1.size()) { printVector(x1, "x = "); }
         else { std::cout << "There is no solution\n"; }
 
-        x2 = gaussMethSequential(A, b, n);
+        x2 = gaussMethSequential(M, n);
         ASSERT_EQ(x1.size(), x2.size());
         for (int i = 0; i < x1.size(); ++i)
             ASSERT_NEAR(x1[i], x2[i], 0.0000001); // to avoid rounding errors after floating point operations
@@ -77,21 +73,19 @@ TEST(Vect_Alt_Signs_MPI, Test_Par_Count3) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     const int n = 5, left = -50, right = 50;
-    std::vector<double> A, b, x1, x2;
+    std::vector<double> M, x1, x2;
 
     if (rank == 0) {
-        A = getRandomVector(n * n, left, right);
-        b = getRandomVector(n, left, right);
-        printVector(A, "A = ");
-        printVector(b, "b = ");
+        M = getRandomVector(n * (n + 1), left, right);
+        printVector(M, "M = ");
     }
 
-    x1 = gaussMethParallel(A, b, n);
+    x1 = gaussMethParallel(M, n);
     if (rank == 0) {
         if (x1.size()) { printVector(x1, "x = "); }
         else { std::cout << "There is no solution\n"; }
 
-        x2 = gaussMethSequential(A, b, n);
+        x2 = gaussMethSequential(M, n);
         ASSERT_EQ(x1.size(), x2.size());
         for (int i = 0; i < x1.size(); ++i)
             ASSERT_NEAR(x1[i], x2[i], 0.0000001); // to avoid rounding errors after floating point operations
@@ -102,16 +96,14 @@ TEST(Vect_Alt_Signs_MPI, Test_Par_Count4) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     const int n = 30, left = -50, right = 50;
-    std::vector<double> A, b, x1, x2;
+    std::vector<double> M, x1, x2;
 
-    if (rank == 0) {
-        A = getRandomVector(n * n, left, right);
-        b = getRandomVector(n, left, right);
-    }
+    if (rank == 0)
+        M = getRandomVector(n * (n + 1), left, right);
 
-    x1 = gaussMethParallel(A, b, n);
+    x1 = gaussMethParallel(M, n);
     if (rank == 0) {
-        x2 = gaussMethSequential(A, b, n);
+        x2 = gaussMethSequential(M, n);
         ASSERT_EQ(x1.size(), x2.size());
         for (int i = 0; i < x1.size(); ++i)
             ASSERT_NEAR(x1[i], x2[i], 0.0000001); // to avoid rounding errors after floating point operations
@@ -122,16 +114,14 @@ TEST(Vect_Alt_Signs_MPI, Test_Par_Count5) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     const int n = 100, left = -100, right = 100;
-    std::vector<double> A, b, x1, x2;
+    std::vector<double> M, x1, x2;
 
-    if (rank == 0) {
-        A = getRandomVector(n * n, left, right);
-        b = getRandomVector(n, left, right);
-    }
+    if (rank == 0)
+        M = getRandomVector(n * (n + 1), left, right);
 
-    x1 = gaussMethParallel(A, b, n);
+    x1 = gaussMethParallel(M, n);
     if (rank == 0) {
-        x2 = gaussMethSequential(A, b, n);
+        x2 = gaussMethSequential(M, n);
         ASSERT_EQ(x1.size(), x2.size());
         for(int i = 0; i < x1.size(); ++i)
             ASSERT_NEAR(x1[i], x2[i], 0.0000001); // to avoid rounding errors after floating point operations

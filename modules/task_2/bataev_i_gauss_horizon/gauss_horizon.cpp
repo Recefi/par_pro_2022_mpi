@@ -26,51 +26,48 @@ void printVector(const std::vector<double>& v, const std::string& prefix) {
 
 bool isAlmostEqual(double a, double b) { return fabs(a - b) <= 0.0000001; }
 
-void printFullMatr(const std::vector<double>& A, const std::vector<double>& b, const std::string& prefix) {
-    int n = b.size();
+void printFullMatr(const std::vector<double>& M, const int n, const std::string& prefix) {
     std::cout << prefix;
     std::cout.precision(4);
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; ++j) {
             std::cout.width(8);
-            if (isAlmostEqual(A[j + i * n], 0))
+            if (isAlmostEqual(M[j + i * (n+1)], 0))
                 std::cout << "0" << " ";
             else
-                std::cout << A[j + i * n] << " ";
+                std::cout << M[j + i * (n+1)] << " ";
         }
-        std::cout << "| " << std::setw(8) << b[i] << "\n";
+        std::cout << "| " << std::setw(8) << M[n + i * (n+1)] << "\n";
     }
     std::cout << "\n";
 }
 
-std::vector<double> gaussMethSequential(std::vector<double> A, std::vector<double> b, const int n) {
-    // printFullMatr(A, b);
+std::vector<double> gaussMethSequential(std::vector<double> M, const int n) {
+    // printFullMatr(M, n);
 
     // The first stage
     for (int j = 0; j < n - 1; ++j) {
         // find the row where the element in the leading column is the largest modulo and which is below the current leading row
         int maxRow = j;
         for (int i = j + 1; i < n; ++i)
-            if (fabs(A[j + i * n]) > fabs(A[j + maxRow * n]))  // take the first matching row
+            if (fabs(M[j + i * (n+1)]) > fabs(M[j + maxRow * (n+1)]))  // take the first matching row
                 maxRow = i;
         // swap with it
         if (maxRow != j) {
-            for (int k = 0; k < n; ++k)
-                std::swap(A[k + j * n], A[k + maxRow * n]);
-            std::swap(b[j], b[maxRow]);
-            // printFullMatr(A, b);
+            for (int k = 0; k < n + 1; ++k)
+                std::swap(M[k + j * (n+1)], M[k + maxRow * (n+1)]);
+            // printFullMatr(M, n);
         }
 
-        if (isAlmostEqual(A[j + j * n], 0))
-            continue;  // if leading element = 0, then go to the next row to avoid division by zero
+        if (isAlmostEqual(M[j + j * (n+1)], 0))
+            continue;  // if leading element == 0, then go to the next row to avoid division by zero
 
         for (int i = j + 1; i < n; ++i) {
-            double alfa = A[j + i*n] / A[j + j*n];
-            for (int k = j; k < n; k++)
-                A[k + i*n] -= alfa * A[k + j*n];
-            b[i] -= alfa * b[j];
+            double alfa = M[j + i*(n+1)] / M[j + j*(n+1)];
+            for (int k = j; k < n + 1; k++)
+                M[k + i*(n+1)] -= alfa * M[k + j*(n+1)];
         }
-        // printFullMatr(A, b);
+        // printFullMatr(M, n);
     }
 
     // The second stage
@@ -78,275 +75,154 @@ std::vector<double> gaussMethSequential(std::vector<double> A, std::vector<doubl
     for (int i = n - 1; i >= 0; i--) {
         double sum = 0;
         for (int j = i + 1; j < n; j++)
-            sum += A[j + i*n] * x[j];
+            sum += M[j + i*(n+1)] * x[j];
 
-        if (isAlmostEqual(A[i + i * n], 0)) {  // if we have risen to a zero leading element
-            if (isAlmostEqual(b[i] - sum, 0)) { // if there is an expression 0x == 0
+        if (isAlmostEqual(M[i + i * (n+1)], 0))  // if we have risen to a zero leading element
+            if (isAlmostEqual(M[n + i * (n+1)] - sum, 0))  // if there is an expression 0x == 0
                 x[i] = 1;  // then the variable can take any real value, let it be 1
-            } else {  // if there is an expression 0x == (b[i] - sum), where (b[i] - sum) != 0
-                // std::cout << "There is no solution\n\n";
+            else  // if there is an expression 0x == (b[i] - sum), where (b[i] - sum) != 0
                 return std::vector<double>();  // then there is no solution, return a null vector
-            }
-        }
         else
-            x[i] = (b[i] - sum) / A[i + i * n];
+            x[i] = (M[n + i * (n+1)] - sum) / M[i + i * (n+1)];
     }
     return x;
 }
 
-std::vector<double> gaussMethParallel(std::vector<double> A, std::vector<double> b, const int n) {
+std::vector<double> gaussMethParallel(std::vector<double> M, const int n) {
     int commSize, rank;
     MPI_Comm_size(MPI_COMM_WORLD, &commSize);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    int lbSize = (n % commSize - 1 >= rank) ? n / commSize + 1 : n / commSize;
-    int lASize = n * lbSize;
-
-    /* working
-    if (rank == 0) {
-        for (int i = 1; i < n; i++) {
-            if (i % commSize == 0)
-                continue;
-            MPI_Send(A.data() + i*n, n, MPI_DOUBLE, i % commSize, i*n, MPI_COMM_WORLD);
-            MPI_Send(b.data() + i, 1, MPI_DOUBLE, i % commSize, i, MPI_COMM_WORLD);
-        }
-    }
-    std::vector<double> lA(lASize), lb(lbSize);
-    for (int i = rank; i < n; i += commSize) {
-        int k = (i - rank) / commSize;
-        if (rank == 0) {
-            for (int j = 0; j < n; ++j)
-                lA[j + k*n] = A[j + i*n];
-            lb[k] = b[i];
-        } else {
-            MPI_Status status;
-            MPI_Recv(lA.data() + k*n, n, MPI_DOUBLE, 0, i*n, MPI_COMM_WORLD, &status);
-            MPI_Recv(lb.data() + k, 1, MPI_DOUBLE, 0, i, MPI_COMM_WORLD, &status);
-        }
-    }
-    */
-
-    /* partially working
-    std::vector<double> lA(lASize), lb(lbSize);
-    std::vector<int> lASizes(n, n), lbSizes(n, 1), lAShifts(n), lbShifts(n);
-    for (int k = 0; k < n / commSize; ++k) {
-        MPI_Scatter(A.data() + k * n, n, MPI_DOUBLE, lA.data() + k*n, n, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-        MPI_Scatter(b.data() + k, 1, MPI_DOUBLE, lb.data() + k, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    }
-    */
-
-    /* partially working
-    //std::vector<int> lASizes(n), lbSizes(n), lAShifts(n), lbShifts(n);
-    //for (int _rank = 0; _rank < commSize; _rank++) {
-    //    for (int i = _rank; i < n; i += commSize) {
-    //        lASizes[i] = n;
-    //        lbSizes[i] = 1;
-    //        lAShifts[i] = i * n;
-    //        lbShifts[i] = i;
-    //    }
-    //}
-
-    std::vector<int> lASizes(commSize), lbSizes(commSize), lAShifts(commSize), lbShifts(commSize);
-    int shiftA = 0, shiftb = 0;
-    for (int _rank = 0; _rank < commSize; _rank++) {
-        lbSizes[_rank] = (n % commSize - 1 >= _rank) ? n / commSize + 1 : n / commSize;
-        lASizes[_rank] = n * lbSizes[_rank];
-        lAShifts[_rank] = shiftA;
-        lbShifts[_rank] = shiftb;
-        shiftA += lASizes[_rank];
-        shiftb += lbSizes[_rank];
-    }
-    std::vector<double> lA(lASize), lb(lbSize);
-    MPI_Scatterv(A.data(), lASizes.data(), lAShifts.data(), MPI_DOUBLE, lA.data(), lASize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    MPI_Scatterv(b.data(), lbSizes.data(), lbShifts.data(), MPI_DOUBLE, lb.data(), lbSize, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    */
+    int lMSize = (n+1) * ((n % commSize > rank) ? n / commSize + 1 : n / commSize);
 
     if (rank == 0) {
         for (int _rank = 1; _rank < commSize; _rank++) {
-            std::vector<double> _lA, _lb;
+            std::vector<double> _lM;
             for (int i = _rank; i < n; i += commSize) {
-                for (int j = 0; j < n; ++j)
-                    _lA.push_back(A[j + i * n]);
-                _lb.push_back(b[i]);
+                for (int j = 0; j < n + 1; ++j)
+                    _lM.push_back(M[j + i * (n+1)]);
             }
-            MPI_Send(_lA.data(), _lA.size(), MPI_DOUBLE, _rank, 0, MPI_COMM_WORLD);
-            MPI_Send(_lb.data(), _lb.size(), MPI_DOUBLE, _rank, 1, MPI_COMM_WORLD);
+            MPI_Send(_lM.data(), _lM.size(), MPI_DOUBLE, _rank, 0, MPI_COMM_WORLD);
         }
     }
-    std::vector<double> lA(lASize), lb(lbSize);
+    std::vector<double> lM(lMSize);
     if (rank == 0) {
-        for (int i = 0; i*commSize < n; i++) {
-            for (int j = 0; j < n; ++j)
-                lA[j + i * n] = A[j + i*commSize*n];
-            lb[i] = b[i*commSize];
-        }
+        for (int i = 0; i*commSize < n; i++)
+            for (int j = 0; j < n + 1; ++j)
+                lM[j + i * (n+1)] = M[j + i*commSize*(n+1)];
     } else {
         MPI_Status status;
-        MPI_Recv(lA.data(), lA.size(), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
-        MPI_Recv(lb.data(), lb.size(), MPI_DOUBLE, 0, 1, MPI_COMM_WORLD, &status);
+        MPI_Recv(lM.data(), lM.size(), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
     }
 
-    // printVector(lA, std::to_string(rank) + ":A=");
-    // printVector(lb, std::to_string(rank) + ":b=");
-    // if (rank == 0) { printFullMatr(A, b); }
+    // printVector(lM, std::to_string(rank) + ":M=");
+    // if (rank == 0) { printFullMatr(M, n); }
 
     // The first stage
     for (int j = 0; j < n - 1; ++j) {
         // find the local row where the element in the leading column is the largest modulo and which is below the current leading row
         int lMaxRow = j;
-        double lMax = (j % commSize == rank) ? fabs(lA[j + (j - rank) / commSize * n]) : 0;
+        double lMax = (j % commSize == rank) ? fabs(lM[j + j / commSize * (n+1)]) : 0;
         for (int i = j + 1; i < n; ++i) {
             if (i % commSize == rank) {
-                if (j % commSize != rank || fabs(lA[j + (i - rank) / commSize * n]) > lMax) {
+                if (fabs(lM[j + i / commSize * (n+1)]) > lMax) {
                     lMaxRow = i;
-                    lMax = fabs(lA[j + (i - rank) / commSize * n]);
+                    lMax = fabs(lM[j + i / commSize * (n+1)]);
                 }
             }
         }
+
         // find the global row
-        int gMaxRow = j;
+        int gMaxRow = 0;
         double gMax = 0;
         MPI_Allreduce(&lMax, &gMax, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
-        /*if (j == 1) {
-            std::cout << rank << ": lMax = " << lMax << "\n";
-            std::cout << "gMax = " << gMax << "\n";
-        }*/
-        if (lMax != gMax)
-            lMaxRow = n;
+        if (lMax != gMax) { lMaxRow = n; }
         MPI_Allreduce(&lMaxRow, &gMaxRow, 1, MPI_INT, MPI_MIN, MPI_COMM_WORLD);  // take the first matching row
 
-        /*if (j == 1) {
-            std::cout << rank << ": _lMax = " << lMax << "\n";
-            std::cout << "_gMax = " << gMax << "\n";
-            std::cout << rank << ": lMaxRow = " << lMaxRow << "\n";
-            std::cout << "gMaxRow = " << gMaxRow << "\n";
-        }*/
         // swap with it
         if (j % commSize == rank || gMaxRow % commSize == rank) {  // only for these two or this one rank
             if (gMaxRow != j) {  // if current row isn't leading
                 if (gMaxRow % commSize == j % commSize) {  // if current leading row and true leading row are at the same rank
-                    for (int k = 0; k < n; ++k)
-                        std::swap(lA[k + (j - rank) / commSize * n], lA[k + (gMaxRow - rank) / commSize * n]);
-                    std::swap(lb[(j - rank) / commSize], lb[(gMaxRow - rank) / commSize]);
+                    for (int k = 0; k < n + 1; ++k)
+                        std::swap(lM[k + j / commSize * (n+1)], lM[k + gMaxRow / commSize * (n+1)]);
                 } else {  // if current leading row and true leading row are at different ranks
-                    std::vector<double> tmpA(n);
-                    double tmpb = 0;
+                    std::vector<double> tmpRow(n+1);
                     int li = 0, dest = 0;
                     if (j % commSize == rank) {
-                        li = (j - rank) / commSize;
+                        li = j / commSize;
                         dest = gMaxRow % commSize;
-                    }
-                    if (gMaxRow % commSize == rank) {
-                        li = (gMaxRow - rank) / commSize;
+                    } else {
+                        li = gMaxRow / commSize;
                         dest = j % commSize;
                     }
                     MPI_Status status;
-                    /*MPI_Send(lA.data() + li * n, n, MPI_DOUBLE, dest, rank * j, MPI_COMM_WORLD);
-                    MPI_Send(lb.data() + li, 1, MPI_DOUBLE, dest, (rank + commSize) * j, MPI_COMM_WORLD);
-                    MPI_Recv(tmpA.data(), n, MPI_DOUBLE, dest, dest * j, MPI_COMM_WORLD, &status);
-                    MPI_Recv(&tmpb, 1, MPI_DOUBLE, dest, (dest + commSize) * j, MPI_COMM_WORLD, &status);*/
-                    MPI_Sendrecv(lA.data() + li * n, n, MPI_DOUBLE, dest, rank * j,
-                        tmpA.data(), n, MPI_DOUBLE, dest, dest * j, MPI_COMM_WORLD, &status);
-                    MPI_Sendrecv(lb.data() + li, 1, MPI_DOUBLE, dest, (rank + commSize) * j,
-                        &tmpb, 1, MPI_DOUBLE, dest, (dest + commSize) * j, MPI_COMM_WORLD, &status);
+                    MPI_Sendrecv(lM.data() + li * (n+1), n+1, MPI_DOUBLE, dest, rank * j,
+                        tmpRow.data(), n+1, MPI_DOUBLE, dest, dest * j, MPI_COMM_WORLD, &status);
 
-                    for (int k = 0; k < n; ++k)
-                        lA[k + li * n] = tmpA[k];
-                    lb[li] = tmpb;
+                    for (int k = 0; k < n+1; ++k)
+                        lM[k + li * (n+1)] = tmpRow[k];
                 }
             }
         }
-          // printVector(lA, "j=" + std::to_string(j) + "|" + std::to_string(rank) + ":A=");
-          // printVector(lb, "j=" + std::to_string(j) + "|" + std::to_string(rank) + ":b=");
+        // printVector(lM, "j=" + std::to_string(j) + "|" + std::to_string(rank) + ":M=");
 
         // send leading row to other ranks
-        std::vector<double> leadA(n);
-        double leadb = 0;
-        /*if (j % commSize == rank) {
-            int li = (j - rank) / commSize;
-            MPI_Send(lA.data() + li * n, n, MPI_DOUBLE, dest, rank * j, MPI_COMM_WORLD);
-            MPI_Send(lb.data() + li, 1, MPI_DOUBLE, dest, (rank + commSize) * j, MPI_COMM_WORLD);
-        } else {
-            MPI_Status status;
-            MPI_Recv(tmpA.data(), n, MPI_DOUBLE, dest, dest * j, MPI_COMM_WORLD, &status);
-            MPI_Recv(&tmpb, 1, MPI_DOUBLE, dest, (dest + commSize) * j, MPI_COMM_WORLD, &status);
-        }*/
-        if (j % commSize == rank) {
-            for (int k = 0; k < n; ++k)
-                leadA[k] = lA[k + (j - rank) / commSize * n];
-            leadb = lb[(j - rank) / commSize];
-        }
-        MPI_Bcast(leadA.data(), n, MPI_DOUBLE, j % commSize, MPI_COMM_WORLD);
-        MPI_Bcast(&leadb, 1, MPI_DOUBLE, j % commSize, MPI_COMM_WORLD);
+        std::vector<double> leadRow(n+1);
+        if (j % commSize == rank)
+            for (int k = 0; k < n+1; ++k)
+                leadRow[k] = lM[k + j / commSize * (n+1)];
+        MPI_Bcast(leadRow.data(), n+1, MPI_DOUBLE, j % commSize, MPI_COMM_WORLD);
 
-        if (isAlmostEqual(leadA[j], 0))
-            continue;  // if leading element = 0, then go to the next row to avoid division by zero
+        if (isAlmostEqual(leadRow[j], 0))
+            continue;  // if leading element == 0, then go to the next row to avoid division by zero
 
-        // printVector(leadA, "j=" + std::to_string(j) + "|" + std::to_string(rank) + ":A=");
-        // std::cout << "j=" << j << "|" << rank << ":b=" << leadb << "\n";
-
+        // divide the leading row by the leading element
         for (int i = j + 1; i < n; ++i) {
             if (i % commSize == rank) {
-                double alfa = lA[j + (i - rank) / commSize * n] / leadA[j];
-                for (int k = j; k < n; k++)
-                    lA[k + (i - rank) / commSize * n] -= alfa * leadA[k];
-                lb[(i - rank) / commSize] -= alfa * leadb;
+                double alfa = lM[j + i / commSize * (n+1)] / leadRow[j];
+                for (int k = j; k < n + 1; k++)
+                    lM[k + i / commSize * (n+1)] -= alfa * leadRow[k];
             }
         }
-          // printVector(lA, "j=" + std::to_string(j) + "|" + std::to_string(rank) + ":A=");
-          // printVector(lb, "j=" + std::to_string(j) + "|" + std::to_string(rank) + ":b=");
+        // printVector(lM, "j=" + std::to_string(j) + "|" + std::to_string(rank) + ":M=");
     }
 
     // The second stage
-    std::vector<double> lx(lbSize);
+    std::vector<double> gx(n);
     for (int i = n - 1; i >= 0; i--) {
-        double leadx = 0;
         int err = 0;
+        double leadx = 0;
 
         if (i % commSize == rank) {
-            if (isAlmostEqual(lA[i + (i - rank) / commSize * n], 0))  // if we have risen to a zero leading element
-                if (isAlmostEqual(lb[(i - rank) / commSize], 0))  // if there is an expression 0x == 0
-                    lx[(i - rank) / commSize] = 1;  // then the variable can take any real value, let it be 1
+            if (isAlmostEqual(lM[i + i / commSize * (n+1)], 0))  // if we have risen to a zero leading element
+                if (isAlmostEqual(lM[n + i / commSize * (n+1)], 0))  // if there is an expression 0x == 0
+                    leadx = 1;  // then the variable can take any real value, let it be 1
                 else  // if there is an expression 0x == (b[i] - sum), where (b[i] - sum) != 0
                     err = 1;  // then there is no solution, return a null vector
             else
-                lx[(i - rank) / commSize] = lb[(i - rank) / commSize] / lA[i + (i - rank) / commSize * n];
-            leadx = lx[(i - rank) / commSize];
+                leadx = lM[n + i / commSize * (n+1)] / lM[i + i / commSize * (n+1)];
             // std::cout << "i=" << i << "|" << rank << ": leadx = " << leadx << "\n";
         }
         MPI_Bcast(&err, 1, MPI_INT, i% commSize, MPI_COMM_WORLD);
-        if (err) {
-            // std::cout << "There is no solution\n\n";
+        if (err)
             return std::vector<double>();
-        }
         MPI_Bcast(&leadx, 1, MPI_DOUBLE, i % commSize, MPI_COMM_WORLD);
 
-        // printVector(lb, "b=");
-        for (int k = lbSize - 1; k >= 0; --k)
-            if (k * commSize + rank < i)
-                lb[k] -= lA[i + k * n] * leadx;
-    }
-    // printVector(lx, "rank:" + std::to_string(rank) + " lx=");
+        if (rank == 0)
+            gx[i] = leadx;
 
-    // gathering result
-    if (commSize >= 2) {
-        std::vector<double> gx(n);
-        if (rank >= 1) {
-            MPI_Send(lx.data(), lx.size(), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
-        } else {
-            for (int i = 0; i < n; i += commSize)
-                gx[i] = lx[i / commSize];
-            MPI_Status status;
-            for (int _rank = 1; _rank < commSize; _rank++) {
-                int _lxSize = (n % commSize - 1 >= _rank) ? n / commSize + 1 : n / commSize;
-                // std::vector<double> _lx(_lxSize);
-                MPI_Recv(lx.data(), _lxSize, MPI_DOUBLE, _rank, 0, MPI_COMM_WORLD, &status);
-                for (int i = _rank; i < n; i += commSize)
-                    gx[i] = lx[(i - _rank) / commSize];
-            }
-        }
-        return gx;
+        // decrease all b[k] that are above the current row
+        for (int k = 0; k < lMSize / (n + 1); k++)
+            if (k * commSize + rank < i)
+                lM[n + k * (n + 1)] -= lM[i + k * (n + 1)] * leadx;
+            else
+                break;
+
+        //for (int k = rank; k < n; k += commSize)
+        //    if (k < i)
+        //        lM[n + k / commSize * (n + 1)] -= lM[i + k / commSize * (n + 1)] * leadx;
+        //    else
+        //        break;
     }
-    else
-       return lx;
+    return gx;
 }
