@@ -1,7 +1,0 @@
-// Copyright 2022 Nikiforova Lada
-#ifndef MODULES_TASK_2_NIKIFOROVA_L_LATTICE_TORUS_LATTICE_TORUS_H_
-#define MODULES_TASK_2_NIKIFOROVA_L_LATTICE_TORUS_LATTICE_TORUS_H_
-
-int optimalRoute(int msg, int sender, int host);
-
-#endif  // MODULES_TASK_2_NIKIFOROVA_L_LATTICE_TORUS_LATTICE_TORUS_H_

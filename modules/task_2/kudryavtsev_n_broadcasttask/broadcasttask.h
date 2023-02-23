@@ -1,7 +1,0 @@
-// Copyright 2022 Kudryavtsev Nikita
-#ifndef MODULES_TASK_2_KUDRYAVTSEV_N_BROADCASTTASK_BROADCASTTASK_H_
-#define MODULES_TASK_2_KUDRYAVTSEV_N_BROADCASTTASK_BROADCASTTASK_H_
-
-int broadcast(void* buffer, int count, MPI_Datatype datatype, int root, MPI_Comm comm);
-
-#endif  // MODULES_TASK_2_KUDRYAVTSEV_N_BROADCASTTASK_BROADCASTTASK_H_
