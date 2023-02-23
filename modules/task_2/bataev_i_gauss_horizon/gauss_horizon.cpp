@@ -47,7 +47,7 @@ std::vector<double> gaussMethSequential(std::vector<double> M, const int n) {
 
     // The first stage
     for (int j = 0; j < n - 1; ++j) {
-        // find the row where the element in the leading column is the largest modulo and which is below the current leading row
+        // find the row where the elem in the leading col is the largest modulo and below the current leading row
         int maxRow = j;
         for (int i = j + 1; i < n; ++i)
             if (fabs(M[j + i * (n+1)]) > fabs(M[j + maxRow * (n+1)]))  // take the first matching row
@@ -120,7 +120,7 @@ std::vector<double> gaussMethParallel(std::vector<double> M, const int n) {
 
     // The first stage
     for (int j = 0; j < n - 1; ++j) {
-        // find the local row where the element in the leading column is the largest modulo and which is below the current leading row
+        // find the local row where the elem in the leading col is the largest modulo and below the current leading row
         int lMaxRow = j;
         double lMax = (j % commSize == rank) ? fabs(lM[j + j / commSize * (n+1)]) : 0;
         for (int i = j + 1; i < n; ++i) {
@@ -217,12 +217,6 @@ std::vector<double> gaussMethParallel(std::vector<double> M, const int n) {
                 lM[n + k * (n + 1)] -= lM[i + k * (n + 1)] * leadx;
             else
                 break;
-
-        //for (int k = rank; k < n; k += commSize)
-        //    if (k < i)
-        //        lM[n + k / commSize * (n + 1)] -= lM[i + k / commSize * (n + 1)] * leadx;
-        //    else
-        //        break;
     }
     return gx;
 }
