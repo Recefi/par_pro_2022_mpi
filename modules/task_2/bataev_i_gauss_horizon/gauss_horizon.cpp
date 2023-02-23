@@ -62,6 +62,7 @@ std::vector<double> gaussMethSequential(std::vector<double> M, const int n) {
         if (isAlmostEqual(M[j + j * (n+1)], 0))
             continue;  // if leading element == 0, then go to the next row to avoid division by zero
 
+        // divide the leading row by the leading element
         for (int i = j + 1; i < n; ++i) {
             double alfa = M[j + i*(n+1)] / M[j + j*(n+1)];
             for (int k = j; k < n + 1; k++)
@@ -93,8 +94,7 @@ std::vector<double> gaussMethParallel(std::vector<double> M, const int n) {
     MPI_Comm_size(MPI_COMM_WORLD, &commSize);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    int lMSize = (n+1) * ((n % commSize > rank) ? n / commSize + 1 : n / commSize);
-
+    // send strings to processes using alternating (cyclic) horizontal splitting
     if (rank == 0) {
         for (int _rank = 1; _rank < commSize; _rank++) {
             std::vector<double> _lM;
@@ -105,6 +105,7 @@ std::vector<double> gaussMethParallel(std::vector<double> M, const int n) {
             MPI_Send(_lM.data(), _lM.size(), MPI_DOUBLE, _rank, 0, MPI_COMM_WORLD);
         }
     }
+    int lMSize = (n + 1) * ((n % commSize > rank) ? n / commSize + 1 : n / commSize);
     std::vector<double> lM(lMSize);
     if (rank == 0) {
         for (int i = 0; i*commSize < n; i++)
@@ -115,8 +116,8 @@ std::vector<double> gaussMethParallel(std::vector<double> M, const int n) {
         MPI_Recv(lM.data(), lM.size(), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
     }
 
-    // printVector(lM, std::to_string(rank) + ":M=");
     // if (rank == 0) { printFullMatr(M, n); }
+    // printVector(lM, std::to_string(rank) + ":lM=");
 
     // The first stage
     for (int j = 0; j < n - 1; ++j) {
@@ -131,7 +132,6 @@ std::vector<double> gaussMethParallel(std::vector<double> M, const int n) {
                 }
             }
         }
-
         // find the global row
         int gMaxRow = 0;
         double gMax = 0;
@@ -164,7 +164,7 @@ std::vector<double> gaussMethParallel(std::vector<double> M, const int n) {
                 }
             }
         }
-        // printVector(lM, "j=" + std::to_string(j) + "|" + std::to_string(rank) + ":M=");
+        // printVector(lM, "j=" + std::to_string(j) + "|" + std::to_string(rank) + ":lM=");
 
         // send leading row to other ranks
         std::vector<double> leadRow(n+1);
@@ -184,13 +184,13 @@ std::vector<double> gaussMethParallel(std::vector<double> M, const int n) {
                     lM[k + i / commSize * (n+1)] -= alfa * leadRow[k];
             }
         }
-        // printVector(lM, "j=" + std::to_string(j) + "|" + std::to_string(rank) + ":M=");
+        // printVector(lM, "j=" + std::to_string(j) + "|" + std::to_string(rank) + ":lM=");
     }
 
     // The second stage
     std::vector<double> gx(n);
     for (int i = n - 1; i >= 0; i--) {
-        int err = 0;
+        int noSol = 0;
         double leadx = 0;
 
         if (i % commSize == rank) {
@@ -198,13 +198,13 @@ std::vector<double> gaussMethParallel(std::vector<double> M, const int n) {
                 if (isAlmostEqual(lM[n + i / commSize * (n+1)], 0))  // if there is an expression 0x == 0
                     leadx = 1;  // then the variable can take any real value, let it be 1
                 else  // if there is an expression 0x == (b[i] - sum), where (b[i] - sum) != 0
-                    err = 1;  // then there is no solution, return a null vector
+                    noSol = 1;  // then there is no solution, return a null vector
             else
                 leadx = lM[n + i / commSize * (n+1)] / lM[i + i / commSize * (n+1)];
-            // std::cout << "i=" << i << "|" << rank << ": leadx = " << leadx << "\n";
         }
-        MPI_Bcast(&err, 1, MPI_INT, i% commSize, MPI_COMM_WORLD);
-        if (err)
+
+        MPI_Bcast(&noSol, 1, MPI_INT, i% commSize, MPI_COMM_WORLD);
+        if (noSol)
             return std::vector<double>();
         MPI_Bcast(&leadx, 1, MPI_DOUBLE, i % commSize, MPI_COMM_WORLD);
 
